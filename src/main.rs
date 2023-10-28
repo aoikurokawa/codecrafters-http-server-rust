@@ -4,7 +4,7 @@ use std::{
 };
 
 fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     loop {
         let (mut socket, _) = listener.accept().unwrap();
