@@ -1,5 +1,5 @@
 use std::{
-    io::{self, ErrorKind, Read, Write},
+    io::{self, Read, Write},
     net::TcpListener,
 };
 
@@ -18,7 +18,7 @@ fn main() -> io::Result<()> {
                     Some(path) => {
                         let count = path.find("/");
                         match count {
-                            Some(count) if count == 0 => {
+                            Some(count) if count == 1 => {
                                 if path.starts_with("/") {
                                     socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
                                 } else {
