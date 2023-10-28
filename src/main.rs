@@ -91,8 +91,8 @@ fn extract_path(req: &str) -> Option<&str> {
 }
 
 fn extract_user_agent(req: &str) -> Option<&str> {
-    for (idx, line) in req.lines().enumerate() {
-        if idx == 3 {
+    for (_idx, line) in req.lines().enumerate() {
+        if line.starts_with("User-Agent") {
             let parts: Vec<&str> = line.split_whitespace().collect();
 
             return parts.get(1).copied();
