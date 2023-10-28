@@ -27,49 +27,51 @@ async fn main() -> io::Result<()> {
     loop {
         let (mut socket, _) = listener.accept().await?;
 
-        let mut buf = [0; 1024];
+        tokio::spawn(async move {
+            let mut buf = [0; 1024];
 
-        match socket.read(&mut buf).await {
-            Ok(_) => {
-                let request = String::from_utf8_lossy(&buf);
+            let _ = match socket.read(&mut buf).await {
+                Ok(_) => {
+                    let request = String::from_utf8_lossy(&buf);
 
-                match extract_path(&request) {
-                    Some(path) => {
-                        let children: Vec<&str> = path.split('/').collect();
+                    match extract_path(&request) {
+                        Some(path) => {
+                            let children: Vec<&str> = path.split('/').collect();
 
-                        let res = if path == "/" {
-                            "HTTP/1.1 200 OK\r\n\r\n".to_string()
-                        } else {
-                           match Path::from(children[1]) {
-                                Path::Echo => {
-                                    let content = children.iter().skip(2).join("/");
-                                    format!(
-                                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                        content.len(), 
-                                        content
-                                    )
-                                },
-                                Path::UserAgent => {
-                                    let user_agent_txt = extract_user_agent(&request).unwrap();
-                                    format!(
-                                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                        user_agent_txt.len(), 
-                                        user_agent_txt
-                                    )
+                            let res = if path == "/" {
+                                "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                            } else {
+                               match Path::from(children[1]) {
+                                    Path::Echo => {
+                                        let content = children.iter().skip(2).join("/");
+                                        format!(
+                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
+                                            content.len(), 
+                                            content
+                                        )
+                                    },
+                                    Path::UserAgent => {
+                                        let user_agent_txt = extract_user_agent(&request).unwrap();
+                                        format!(
+                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
+                                            user_agent_txt.len(), 
+                                            user_agent_txt
+                                        )
+                                    }
+                                    Path::NotFound => {
+                                        "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                    }
                                 }
-                                Path::NotFound => {
-                                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-                                }
-                            }
-                        };
+                            };
 
-                        socket.write(res.as_bytes()).await?
+                            socket.write(res.as_bytes()).await
+                        }
+                        None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
                     }
-                    None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await?,
                 }
-            }
-            Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await?,
-        };
+                Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+            };
+        });
     }
 }
 
