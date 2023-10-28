@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Read, Write},
+    io::{self, ErrorKind, Read, Write},
     net::TcpListener,
 };
 
@@ -10,17 +10,34 @@ fn main() -> io::Result<()> {
         let (mut socket, _) = listener.accept().unwrap();
 
         let mut buf = [0; 1024];
-        socket.read(&mut buf)?;
-        socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?;
-        // for stream in listener.incoming() {
-        //     match stream {
-        //         Ok(_stream) => {
-        //             println!("accepted new connection");
-        //         }
-        //         Err(e) => {
-        //             println!("error: {}", e);
-        //         }
-        //     }
-        // }
+
+        match socket.read(&mut buf) {
+            Ok(_) => {
+                let request = String::from_utf8_lossy(&buf);
+                match extract_path(&request) {
+                    Some(path) => {
+                        if path.starts_with("/") {
+                            socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
+                        } else {
+                            socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
+                        }
+                    }
+                    None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
+                }
+            }
+            Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
+        };
     }
+}
+
+fn extract_path(req: &str) -> Option<&str> {
+    for (idx, line) in req.lines().enumerate() {
+        if idx == 0 {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+
+            return parts.get(1).copied();
+        }
+    }
+
+    None
 }
