@@ -1,9 +1,8 @@
-use std::{
-    io::{self, Read, Write},
-    net::TcpListener,
-};
+use std::io;
 
 use itertools::Itertools;
+use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 enum Path {
     Echo,
@@ -23,14 +22,14 @@ impl From<&str> for Path {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:4221").await?;
 
     loop {
-        let (mut socket, _) = listener.accept().unwrap();
+        let (mut socket, _) = listener.accept().await?;
 
         let mut buf = [0; 1024];
 
-        match socket.read(&mut buf) {
+        match socket.read(&mut buf).await {
             Ok(_) => {
                 let request = String::from_utf8_lossy(&buf);
 
@@ -64,12 +63,12 @@ async fn main() -> io::Result<()> {
                             }
                         };
 
-                        socket.write(res.as_bytes())?
+                        socket.write(res.as_bytes()).await?
                     }
-                    None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
+                    None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await?,
                 }
             }
-            Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
+            Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await?,
         };
     }
 }
