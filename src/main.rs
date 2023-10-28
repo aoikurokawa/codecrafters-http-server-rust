@@ -14,18 +14,18 @@ fn main() -> io::Result<()> {
         match socket.read(&mut buf) {
             Ok(_) => {
                 let request = String::from_utf8_lossy(&buf);
+
                 match extract_path(&request) {
                     Some(path) => {
-                        let count = path.find("/");
-                        match count {
-                            Some(count) if count == 1 => {
-                                if path.starts_with("/") {
-                                    socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
-                                } else {
-                                    socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
-                                }
+                        let children: Vec<&str> = path.split("/").collect();
+                        if children.len() == 1 {
+                            if path.starts_with("/") {
+                                socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
+                            } else {
+                                socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
                             }
-                            Some(_) | None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
+                        } else {
+                            socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
                         }
                     }
                     None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
