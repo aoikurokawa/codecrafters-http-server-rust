@@ -35,19 +35,16 @@ fn main() -> io::Result<()> {
                     Some(path) => {
                         let children: Vec<&str> = path.split('/').collect();
 
-                        let mut res = String::new();
-                        for child in children.clone() {
-                            if children.len() == 1 && path == "/" {
-                                res = "HTTP/1.1 200 OK\r\n\r\n".to_string();
-                                break;
-                            }
-
-                            if child == "echo" {
-                                res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n{}\r\n\r\n", children[2].len(), children[2]);
+                        let res = if path == "/" {
+                            "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                        } else {
+                            if children[1] == "echo" {
+                                format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n{}\r\n\r\n", children[2].len(), children[2])
                             } else {
-                                res = "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
                             }
-                        }
+                        };
+
                         socket.write(res.as_bytes())?
                     }
                     None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?,
