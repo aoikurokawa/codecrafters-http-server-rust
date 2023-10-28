@@ -4,7 +4,7 @@ use std::{
 };
 
 fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
 
     loop {
         let (mut socket, _) = listener.accept().unwrap();
@@ -15,10 +15,15 @@ fn main() -> io::Result<()> {
             Ok(_) => {
                 let request = String::from_utf8_lossy(&buf);
 
+                println!("{:?}", request);
+
                 match extract_path(&request) {
                     Some(path) => {
-                        if path == "/" {
-                            socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
+                        let paths: Vec<&str> = path.split('/').collect();
+
+                        if paths[1] == "echo" {
+                            let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n{}\r\n\r\n", paths[2].len(), paths[2]);
+                            socket.write(res.as_bytes())?
                         } else {
                             socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
                         }
