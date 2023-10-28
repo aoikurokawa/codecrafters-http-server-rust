@@ -3,6 +3,8 @@ use std::{
     net::TcpListener,
 };
 
+use itertools::Itertools;
+
 enum Path {
     Index,
     Echo,
@@ -39,10 +41,11 @@ fn main() -> io::Result<()> {
                             "HTTP/1.1 200 OK\r\n\r\n".to_string()
                         } else {
                             if children[1] == "echo" {
+                                let content = children.iter().skip(2).join("/");
                                 format!(
                                     "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                    children[2].len(), 
-                                    children[2]
+                                    content.len(), 
+                                    content
                                 )
                             } else {
                                 "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
