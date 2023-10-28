@@ -39,7 +39,11 @@ fn main() -> io::Result<()> {
                             "HTTP/1.1 200 OK\r\n\r\n".to_string()
                         } else {
                             if children[1] == "echo" {
-                                format!("HTTP/1.1 200 OK Content-Type: text/plain Content-Length: {} {}\r\n\r\n", children[2].len(), children[2])
+                                format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
+                                    children[2].len(), 
+                                    children[2]
+                                )
                             } else {
                                 "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
                             }
