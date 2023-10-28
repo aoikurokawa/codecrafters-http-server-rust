@@ -61,11 +61,6 @@ fn main() -> io::Result<()> {
                                     "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
                                 }
                             }
-                            // if children[1] == "echo" {
-
-                            // } else {
-                            //     "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-                            // }
                         };
 
                         socket.write(res.as_bytes())?
