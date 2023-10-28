@@ -21,7 +21,8 @@ impl From<&str> for Path {
     }
 }
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     loop {
