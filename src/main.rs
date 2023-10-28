@@ -18,11 +18,18 @@ fn main() -> io::Result<()> {
                 match extract_path(&request) {
                     Some(path) => {
                         if path.starts_with("/") {
-                            let children: Vec<&str> = path.split("/").collect();
-                            if children.len() <= 1 {
-                                socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
-                            } else {
-                                socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
+                            let count = path.find("/");
+                            match count {
+                                Some(count) if count == 1 => {
+                                    if path.starts_with("/") {
+                                        socket.write(b"HTTP/1.1 200 OK\r\n\r\n")?
+                                    } else {
+                                        socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
+                                    }
+                                }
+                                Some(_) | None => {
+                                    socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
+                                }
                             }
                         } else {
                             socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?
