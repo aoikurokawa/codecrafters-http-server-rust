@@ -9,6 +9,12 @@ use tokio::{
     sync::Mutex,
 };
 
+enum Method {
+    Get,
+    Post { body: String },
+    Unknown,
+}
+
 enum Path {
     Echo,
     UserAgent,
@@ -52,62 +58,155 @@ async fn main() -> io::Result<()> {
                 Ok(_) => {
                     let request = String::from_utf8_lossy(&buf);
 
-                    match extract_path(&request) {
-                        Some(path) => {
-                            let children: Vec<&str> = path.split('/').collect();
+                    match extract_method(&request) {
+                        Method::Get => match extract_path(&request) {
+                            Some(path) => {
+                                let children: Vec<&str> = path.split('/').collect();
 
-                            let res = if path == "/" {
-                                "HTTP/1.1 200 OK\r\n\r\n".to_string()
-                            } else {
-                                match Path::from(children[1]) {
-                                    Path::Echo => {
-                                        let content = children.iter().skip(2).join("/");
-                                        format!(
+                                let res = if path == "/" {
+                                    "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                                } else {
+                                    match Path::from(children[1]) {
+                                        Path::Echo => {
+                                            let content = children.iter().skip(2).join("/");
+                                            format!(
                                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
                                             content.len(),
                                             content
                                         )
-                                    }
-                                    Path::UserAgent => {
-                                        let user_agent_txt = extract_user_agent(&request).unwrap();
-                                        format!(
+                                        }
+                                        Path::UserAgent => {
+                                            let user_agent_txt =
+                                                extract_user_agent(&request).unwrap();
+                                            format!(
                                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
                                             user_agent_txt.len(),
                                             user_agent_txt
                                         )
-                                    }
-                                    Path::Files => {
-                                        let dir = directry.lock().await;
+                                        }
+                                        Path::Files => {
+                                            let dir = directry.lock().await;
 
-                                        match fs::File::open(format!("{}/{}", dir, children[2]))
-                                            .await
-                                        {
-                                            Ok(mut file_name) => {
-                                                let mut contents = vec![];
-                                                file_name.read_to_end(&mut contents).await.unwrap();
+                                            match fs::File::open(format!("{}/{}", dir, children[2]))
+                                                .await
+                                            {
+                                                Ok(mut file_name) => {
+                                                    let mut contents = vec![];
+                                                    file_name
+                                                        .read_to_end(&mut contents)
+                                                        .await
+                                                        .unwrap();
 
-                                                format!(
+                                                    format!(
                                             "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}", 
                                             contents.len(),
                                             String::from_utf8(contents).unwrap()
                                         )
+                                                }
+                                                Err(_e) => {
+                                                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                                }
                                             }
-                                            Err(_e) => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
+                                        }
+                                        Path::NotFound => {
+                                            "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
                                         }
                                     }
-                                    Path::NotFound => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
-                                }
-                            };
+                                };
 
-                            socket.write(res.as_bytes()).await
-                        }
-                        None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                                socket.write(res.as_bytes()).await
+                            }
+                            None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                        },
+                        Method::Post { body } => match extract_path(&request) {
+                            Some(path) => {
+                                let children: Vec<&str> = path.split('/').collect();
+
+                                let res = if path == "/" {
+                                    "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                                } else {
+                                    match Path::from(children[1]) {
+                                        Path::Echo => {
+                                            let content = children.iter().skip(2).join("/");
+                                            format!(
+                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
+                                            content.len(),
+                                            content
+                                        )
+                                        }
+                                        Path::UserAgent => {
+                                            let user_agent_txt =
+                                                extract_user_agent(&request).unwrap();
+                                            format!(
+                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
+                                            user_agent_txt.len(),
+                                            user_agent_txt
+                                        )
+                                        }
+                                        Path::Files => {
+                                            let dir = directry.lock().await;
+
+                                            match fs::File::create(format!(
+                                                "{}/{}",
+                                                dir, children[2]
+                                            ))
+                                            .await
+                                            {
+                                                Ok(mut file_name) => {
+                                                    file_name
+                                                        .write_all(body.as_bytes())
+                                                        .await
+                                                        .unwrap();
+
+                                                    "HTTP/1.1 201 OK\r\n\r\n".to_string()
+                                                }
+                                                Err(_e) => {
+                                                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                                }
+                                            }
+                                        }
+                                        Path::NotFound => {
+                                            "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                        }
+                                    }
+                                };
+
+                                socket.write(res.as_bytes()).await
+                            }
+                            None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                        },
+                        Method::Unknown => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
                     }
                 }
                 Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
             };
         });
     }
+}
+
+fn extract_method(req: &str) -> Method {
+    let mut method = Method::Unknown;
+    for (idx, line) in req.lines().enumerate() {
+        if idx == 0 {
+            method = if line.starts_with("GET") {
+                Method::Get
+            } else if line.starts_with("POST") {
+                Method::Post {
+                    body: String::new(),
+                }
+            } else {
+                Method::Unknown
+            };
+        }
+
+        if idx == 4 {
+            method = Method::Post {
+                body: line.to_string(),
+            }
+        }
+    }
+
+    method
 }
 
 fn extract_path(req: &str) -> Option<&str> {
