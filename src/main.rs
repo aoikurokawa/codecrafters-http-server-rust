@@ -1,12 +1,18 @@
 use std::io;
+use std::sync::Arc;
 
 use itertools::Itertools;
-use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::fs;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    sync::Mutex,
+};
 
 enum Path {
     Echo,
     UserAgent,
+    Files,
     NotFound,
 }
 
@@ -15,6 +21,7 @@ impl From<&str> for Path {
         match value {
             "echo" => Self::Echo,
             "user-agent" => Self::UserAgent,
+            "files" => Self::Files,
             _ => Self::NotFound,
         }
     }
@@ -22,10 +29,21 @@ impl From<&str> for Path {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    let mut directry = Arc::new(Mutex::new(String::new()));
+    for (index, arg) in args.iter().enumerate() {
+        if arg == "--directory" && index + 1 < args.len() {
+            directry = Arc::new(Mutex::new(args[index + 1].clone()));
+        }
+    }
+
     let listener = TcpListener::bind("127.0.0.1:4221").await?;
 
     loop {
         let (mut socket, _) = listener.accept().await?;
+
+        let directry = directry.clone();
 
         tokio::spawn(async move {
             let mut buf = [0; 1024];
@@ -41,26 +59,41 @@ async fn main() -> io::Result<()> {
                             let res = if path == "/" {
                                 "HTTP/1.1 200 OK\r\n\r\n".to_string()
                             } else {
-                               match Path::from(children[1]) {
+                                match Path::from(children[1]) {
                                     Path::Echo => {
                                         let content = children.iter().skip(2).join("/");
                                         format!(
                                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                            content.len(), 
+                                            content.len(),
                                             content
                                         )
-                                    },
+                                    }
                                     Path::UserAgent => {
                                         let user_agent_txt = extract_user_agent(&request).unwrap();
                                         format!(
                                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                            user_agent_txt.len(), 
+                                            user_agent_txt.len(),
                                             user_agent_txt
                                         )
                                     }
-                                    Path::NotFound => {
-                                        "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                    Path::Files => {
+                                        let dir = directry.lock().await;
+
+                                        let mut file =
+                                            fs::File::open(format!("{}/{}", dir, children[2]))
+                                                .await
+                                                .unwrap();
+
+                                        let mut contents = vec![];
+                                        file.read_to_end(&mut contents).await.unwrap();
+
+                                        format!(
+                                            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}", 
+                                            contents.len(),
+                                            String::from_utf8(contents).unwrap()
+                                        )
                                     }
+                                    Path::NotFound => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
                                 }
                             };
 
