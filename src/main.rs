@@ -202,7 +202,7 @@ fn extract_method(req: &str) -> Method {
     }
 
     Method::Post {
-        body: lines.last().unwrap().to_string(),
+        body: lines.last().unwrap().trim_end_matches('\x00').to_string(),
     }
 }
 
