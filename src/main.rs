@@ -177,7 +177,7 @@ async fn main() -> io::Result<()> {
 
 fn http_response(status_code: u16, status: &str, content_type: &str, body: &str) -> String {
     format!(
-        "HTTP/1.1 {}\r\n{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
         status_code,
         status,
         content_type,
