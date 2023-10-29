@@ -79,19 +79,21 @@ async fn main() -> io::Result<()> {
                                     Path::Files => {
                                         let dir = directry.lock().await;
 
-                                        let mut file =
-                                            fs::File::open(format!("{}/{}", dir, children[2]))
-                                                .await
-                                                .unwrap();
+                                        match fs::File::open(format!("{}/{}", dir, children[2]))
+                                            .await
+                                        {
+                                            Ok(mut file_name) => {
+                                                let mut contents = vec![];
+                                                file_name.read_to_end(&mut contents).await.unwrap();
 
-                                        let mut contents = vec![];
-                                        file.read_to_end(&mut contents).await.unwrap();
-
-                                        format!(
+                                                format!(
                                             "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}", 
                                             contents.len(),
                                             String::from_utf8(contents).unwrap()
                                         )
+                                            }
+                                            Err(_e) => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
+                                        }
                                     }
                                     Path::NotFound => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
                                 }
