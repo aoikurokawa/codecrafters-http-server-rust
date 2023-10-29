@@ -185,10 +185,11 @@ async fn main() -> io::Result<()> {
 }
 
 fn extract_method(req: &str) -> Method {
-    let mut method = Method::Unknown;
-    for (idx, line) in req.lines().enumerate() {
+    let lines = req.lines();
+
+    for (idx, line) in lines.clone().enumerate() {
         if idx == 0 {
-            method = if line.starts_with("GET") {
+            if line.starts_with("GET") {
                 return Method::Get;
             } else if line.starts_with("POST") {
                 Method::Post {
@@ -198,15 +199,11 @@ fn extract_method(req: &str) -> Method {
                 return Method::Unknown;
             };
         }
-
-        if idx == 4 {
-            method = Method::Post {
-                body: line.to_string(),
-            }
-        }
     }
 
-    method
+    Method::Post {
+        body: lines.last().unwrap().to_string(),
+    }
 }
 
 fn extract_path(req: &str) -> Option<&str> {
