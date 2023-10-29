@@ -64,25 +64,17 @@ async fn main() -> io::Result<()> {
                                 let children: Vec<&str> = path.split('/').collect();
 
                                 let res = if path == "/" {
-                                    "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                                    http_response(200, "OK", "", "")
                                 } else {
                                     match Path::from(children[1]) {
                                         Path::Echo => {
                                             let content = children.iter().skip(2).join("/");
-                                            format!(
-                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                            content.len(),
-                                            content
-                                        )
+                                            http_response(200, "OK", "text/plain", &content)
                                         }
                                         Path::UserAgent => {
                                             let user_agent_txt =
                                                 extract_user_agent(&request).unwrap();
-                                            format!(
-                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                            user_agent_txt.len(),
-                                            user_agent_txt
-                                        )
+                                            http_response(200, "OK", "text/plain", user_agent_txt)
                                         }
                                         Path::Files => {
                                             let dir = directry.lock().await;
@@ -97,51 +89,38 @@ async fn main() -> io::Result<()> {
                                                         .await
                                                         .unwrap();
 
-                                                    format!(
-                                            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}", 
-                                            contents.len(),
-                                            String::from_utf8(contents).unwrap()
-                                        )
+                                                    http_response(
+                                                        200,
+                                                        "OK",
+                                                        "application/octet-stream",
+                                                        &String::from_utf8(contents).unwrap(),
+                                                    )
                                                 }
-                                                Err(_e) => {
-                                                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-                                                }
+                                                Err(_e) => http_response(404, "Not Found", "", ""),
                                             }
                                         }
-                                        Path::NotFound => {
-                                            "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-                                        }
+                                        Path::NotFound => http_response(404, "Not Found", "", ""),
                                     }
                                 };
 
                                 socket.write(res.as_bytes()).await
                             }
-                            None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                            None => {
+                                let res = http_response(404, "Not Found", "", "");
+                                socket.write(res.as_bytes()).await
+                            }
                         },
                         Method::Post { body } => match extract_path(&request) {
                             Some(path) => {
                                 let children: Vec<&str> = path.split('/').collect();
 
                                 let res = if path == "/" {
-                                    "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                                    http_response(200, "OK", "text/plain", "")
                                 } else {
                                     match Path::from(children[1]) {
-                                        Path::Echo => {
-                                            let content = children.iter().skip(2).join("/");
-                                            format!(
-                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                            content.len(),
-                                            content
-                                        )
-                                        }
+                                        Path::Echo => http_response(200, "OK", "text/plain", ""),
                                         Path::UserAgent => {
-                                            let user_agent_txt =
-                                                extract_user_agent(&request).unwrap();
-                                            format!(
-                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", 
-                                            user_agent_txt.len(),
-                                            user_agent_txt
-                                        )
+                                            http_response(200, "OK", "text/plain", "")
                                         }
                                         Path::Files => {
                                             let dir = directry.lock().await;
@@ -157,31 +136,54 @@ async fn main() -> io::Result<()> {
                                                         .write_all(body.as_bytes())
                                                         .await
                                                         .unwrap();
-
-                                                    "HTTP/1.1 201 OK\r\n\r\n".to_string()
+                                                    http_response(201, "OK", "text/plain", "")
                                                 }
-                                                Err(_e) => {
-                                                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-                                                }
+                                                Err(_e) => http_response(
+                                                    404,
+                                                    "Not Found",
+                                                    "text/plain",
+                                                    "",
+                                                ),
                                             }
                                         }
                                         Path::NotFound => {
-                                            "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                                            http_response(404, "Not Found", "text/plain", "")
                                         }
                                     }
                                 };
 
                                 socket.write(res.as_bytes()).await
                             }
-                            None => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                            None => {
+                                let res = http_response(404, "Not Found", "text/plain", "");
+
+                                socket.write(res.as_bytes()).await
+                            }
                         },
-                        Method::Unknown => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                        Method::Unknown => {
+                            let res = http_response(404, "Not Found", "text/plain", "");
+                            socket.write(res.as_bytes()).await
+                        }
                     }
                 }
-                Err(_e) => socket.write(b"HTTP/1.1 404 Not Found\r\n\r\n").await,
+                Err(_e) => {
+                    let res = http_response(404, "Not Found", "text/plain", "");
+                    socket.write(res.as_bytes()).await
+                }
             };
         });
     }
+}
+
+fn http_response(status_code: u16, status: &str, content_type: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {}\r\n{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+        status_code,
+        status,
+        content_type,
+        body.len(),
+        body
+    )
 }
 
 fn extract_method(req: &str) -> Method {
