@@ -189,13 +189,13 @@ fn extract_method(req: &str) -> Method {
     for (idx, line) in req.lines().enumerate() {
         if idx == 0 {
             method = if line.starts_with("GET") {
-                Method::Get
+                return Method::Get;
             } else if line.starts_with("POST") {
                 Method::Post {
                     body: String::new(),
                 }
             } else {
-                Method::Unknown
+                return Method::Unknown;
             };
         }
 
