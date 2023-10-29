@@ -1,7 +1,10 @@
+mod response;
+
 use std::io;
 use std::sync::Arc;
 
 use itertools::Itertools;
+use response::HttpResponse;
 use tokio::fs;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -66,16 +69,25 @@ async fn handle_request(mut socket: tokio::net::TcpStream, directry: Arc<Mutex<S
                         let children: Vec<&str> = path.split('/').collect();
 
                         let res = if path == "/" {
-                            http_response(200, "OK", "", "")
+                            HttpResponse::Ok {
+                                content_type: "text/plain".to_string(),
+                                body: "".to_string(),
+                            }
                         } else {
                             match Path::from(children[1]) {
                                 Path::Echo => {
                                     let content = children.iter().skip(2).join("/");
-                                    http_response(200, "OK", "text/plain", &content)
+                                    HttpResponse::Ok {
+                                        content_type: "text/plain".to_string(),
+                                        body: content,
+                                    }
                                 }
                                 Path::UserAgent => {
                                     let user_agent_txt = extract_user_agent(&request).unwrap();
-                                    http_response(200, "OK", "text/plain", user_agent_txt)
+                                    HttpResponse::Ok {
+                                        content_type: "text/plain".to_string(),
+                                        body: user_agent_txt.to_string(),
+                                    }
                                 }
                                 Path::Files => {
                                     let dir = directry.lock().await;
@@ -85,24 +97,24 @@ async fn handle_request(mut socket: tokio::net::TcpStream, directry: Arc<Mutex<S
                                             let mut contents = vec![];
                                             file_name.read_to_end(&mut contents).await.unwrap();
 
-                                            http_response(
-                                                200,
-                                                "OK",
-                                                "application/octet-stream",
-                                                &String::from_utf8(contents).unwrap(),
-                                            )
+                                            HttpResponse::Ok {
+                                                content_type: "application/octet-stream"
+                                                    .to_string(),
+                                                body: String::from_utf8(contents).unwrap(),
+                                            }
                                         }
-                                        Err(_e) => http_response(404, "Not Found", "", ""),
+                                        Err(_e) => HttpResponse::NotFound,
                                     }
                                 }
-                                Path::NotFound => http_response(404, "Not Found", "", ""),
+                                Path::NotFound => HttpResponse::NotFound,
                             }
                         };
 
-                        socket.write(res.as_bytes()).await
+                        let res_txt = res.to_http_string();
+                        socket.write(res_txt.as_bytes()).await
                     }
                     None => {
-                        let res = http_response(404, "Not Found", "", "");
+                        let res = HttpResponse::NotFound.to_http_string();
                         socket.write(res.as_bytes()).await
                     }
                 },
@@ -111,11 +123,20 @@ async fn handle_request(mut socket: tokio::net::TcpStream, directry: Arc<Mutex<S
                         let children: Vec<&str> = path.split('/').collect();
 
                         let res = if path == "/" {
-                            http_response(200, "OK", "text/plain", "")
+                            HttpResponse::Ok {
+                                content_type: "text/plain".to_string(),
+                                body: "".to_string(),
+                            }
                         } else {
                             match Path::from(children[1]) {
-                                Path::Echo => http_response(200, "OK", "text/plain", ""),
-                                Path::UserAgent => http_response(200, "OK", "text/plain", ""),
+                                Path::Echo => HttpResponse::Ok {
+                                    content_type: "text/plain".to_string(),
+                                    body: "".to_string(),
+                                },
+                                Path::UserAgent => HttpResponse::Ok {
+                                    content_type: "text/plain".to_string(),
+                                    body: "".to_string(),
+                                },
                                 Path::Files => {
                                     let dir = directry.lock().await;
 
@@ -123,47 +144,34 @@ async fn handle_request(mut socket: tokio::net::TcpStream, directry: Arc<Mutex<S
                                     {
                                         Ok(mut file_name) => {
                                             file_name.write_all(body.as_bytes()).await.unwrap();
-                                            http_response(201, "OK", "text/plain", "")
+                                            HttpResponse::Created
                                         }
-                                        Err(_e) => {
-                                            http_response(404, "Not Found", "text/plain", "")
-                                        }
+                                        Err(_e) => HttpResponse::NotFound,
                                     }
                                 }
-                                Path::NotFound => http_response(404, "Not Found", "text/plain", ""),
+                                Path::NotFound => HttpResponse::NotFound,
                             }
                         };
 
-                        socket.write(res.as_bytes()).await
+                        let res_txt = res.to_http_string();
+                        socket.write(res_txt.as_bytes()).await
                     }
                     None => {
-                        let res = http_response(404, "Not Found", "text/plain", "");
-
+                        let res = HttpResponse::NotFound.to_http_string();
                         socket.write(res.as_bytes()).await
                     }
                 },
                 Method::Unknown => {
-                    let res = http_response(404, "Not Found", "text/plain", "");
+                    let res = HttpResponse::NotFound.to_http_string();
                     socket.write(res.as_bytes()).await
                 }
             }
         }
         Err(_e) => {
-            let res = http_response(404, "Not Found", "text/plain", "");
+            let res = HttpResponse::NotFound.to_http_string();
             socket.write(res.as_bytes()).await
         }
     };
-}
-
-fn http_response(status_code: u16, status: &str, content_type: &str, body: &str) -> String {
-    format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
-        status_code,
-        status,
-        content_type,
-        body.len(),
-        body
-    )
 }
 
 fn extract_method(req: &str) -> Method {
