@@ -187,24 +187,19 @@ fn http_response(status_code: u16, status: &str, content_type: &str, body: &str)
 }
 
 fn extract_method(req: &str) -> Method {
-    let lines = req.lines();
-
-    for (idx, line) in lines.clone().enumerate() {
-        if idx == 0 {
-            if line.starts_with("GET") {
-                return Method::Get;
-            } else if line.starts_with("POST") {
-                Method::Post {
-                    body: String::new(),
-                }
-            } else {
-                return Method::Unknown;
-            };
-        }
+    let lines: Vec<&str> = req.lines().collect();
+    if lines.is_empty() {
+        return Method::Unknown;
     }
 
-    Method::Post {
-        body: lines.last().unwrap().trim_end_matches('\x00').to_string(),
+    if lines[0].starts_with("GET") {
+        Method::Get
+    } else if lines[0].starts_with("POST") {
+        Method::Post {
+            body: lines.last().unwrap().trim_end_matches('\x00').to_string(),
+        }
+    } else {
+        Method::Unknown
     }
 }
 
